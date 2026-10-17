@@ -240,7 +240,7 @@ def get_extras(detail_url: str, active_prices: dict[str, int]) -> tuple[dict[str
 
         # Log all data-testid values present — aids selector diagnosis
         page_soup = BeautifulSoup(driver.page_source, "html.parser")
-        all_testids = sorted({el.get("data-testid") for el in page_soup.select("[data-testid]") if el.get("data-testid")})
+        all_testids = sorted({str(el["data-testid"]) for el in page_soup.select("[data-testid]") if el.get("data-testid")})
         log.debug("get_extras: data-testid values on detail page: %s", all_testids)
 
         # --- Step 1: open "View all specs and features" panel ---
@@ -284,7 +284,7 @@ def get_extras(detail_url: str, active_prices: dict[str, int]) -> tuple[dict[str
 
         # Log updated data-testid values after opening the specs panel
         page_soup = BeautifulSoup(driver.page_source, "html.parser")
-        post_click_testids = sorted({el.get("data-testid") for el in page_soup.select("[data-testid]") if el.get("data-testid")})
+        post_click_testids = sorted({str(el["data-testid"]) for el in page_soup.select("[data-testid]") if el.get("data-testid")})
         log.debug("get_extras: data-testid values after specs click: %s", post_click_testids)
 
         # --- Step 2: expand "Added extras" accordion ---

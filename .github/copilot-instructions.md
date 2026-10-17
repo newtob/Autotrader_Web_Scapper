@@ -28,7 +28,26 @@ Dev dependencies (`ruff`, `ty`) are in `[dependency-groups] dev` and installed a
 
 The entire scraper lives in a single file: `auto_trader.py`. The entry point initialises a global Firefox `driver` and `WebDriverWait` instance, then calls `_load_extras_prices()` and `get_config()`.
 
-**Data flow:**
+## SDLC
+
+Before relying on a design document, read [`STATE.md`](STATE.md). Phase designs
+describe intended behaviour; `STATE.md`, the source, and tests describe what is
+actually wired. Read [`TECH_DEBT.md`](TECH_DEBT.md) for known constraints and
+deferred work. Do not silently reintroduce deferred architecture.
+
+### Working rules
+
+1. Preserve trust and authority boundaries. A capability is not permission:
+   consequential actions need scoped, auditable, and recoverable approval.
+2. For user-facing, streaming, delegation, or reconvene changes, trace the
+   complete path and add a deterministic regression test through the real seam.
+3. Keep changes proportional to the current phase. Record deliberate deferrals
+   in `TECH_DEBT.md`; update `STATE.md` only for real implementation-state
+   changes.
+4. Do not commit unless the user explicitly asks. Preserve unrelated work in a
+   dirty worktree.
+
+## Data flow:
 1. `_load_extras_prices()` — loads `extras_prices.json` into the module-level `EXTRAS_PRICES: dict[str, int]` and `EXTRA_COLUMNS: list[str]` constants at startup.
 2. `get_config(autotrader_config.csv)` — reads search parameters (postcode, start page, year range, radius), then iterates every make from `make.json`.
 3. `get_total_pages()` — navigates to autotrader.co.uk, determines total pages (capped at 101), then loops pages scraping listings in **two passes**:
@@ -40,7 +59,9 @@ The entire scraper lives in a single file: `auto_trader.py`. The entry point ini
 **Errors:** Appended to `error_log.txt` (page-level exceptions are caught and logged; execution continues).
 **Structured log:** `scraper.log` — DEBUG level (full selector traces, HTML snippets, row counts). Console shows INFO+.
 
-## Spreadsheet Column Layout
+## Data Layout
+
+Initally just a single spreadsheet table, and now a single database table.
 
 | Columns | Description |
 |---|---|
@@ -69,3 +90,16 @@ The entire scraper lives in a single file: `auto_trader.py`. The entry point ini
 - **Detail page navigation**: `get_extras()` uses `WebDriverWait(driver, 60)` for page load, then tries multiple `data-testid` selectors and XPath text searches to click "View all specs and features" and "Added extras". If either click fails, it returns `{}` and logs at DEBUG.
 - **Cookie consent**: `setup_cookies()` sets `acceptATCookies=true` and `atwv=1` on `.autotrader.co.uk` before any search. Without these the Sourcepoint CMP blocks listings from rendering.
 - **Page load strategy**: `eager` (fires on DOMContentLoaded, not `load`) — prevents hanging on AutoTrader's ad/tracking resources.
+
+## AgentSoul Memory Policy
+
+Location: `@/Users/bennewton/Ai/AgentSoul/AgentSoul/`
+
+- Store memories, conventions, and major architectural choices.
+- AgentSoul is its own repository; update its files directly without committing as part of this repository's work
+- Use OKF markdown format with frontmatter that includes `type:`
+- Follow the `llm-wiki` pattern for pages and links
+- Before every /plan, search AgentSoul for relevant prior knowledge, conventions, architectural decisions, and known gaps
+- Update AgentSoul after every major architecture, contract, CI/CD, security, operational, or incident-driven change
+- Dependency upgrades and documentation-only changes are not major unless they alter an established convention or contract
+- The purpose of AgentSoul is to capture this repository's way of working so future projects can reuse proven knowledge and practices
