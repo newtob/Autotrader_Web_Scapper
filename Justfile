@@ -20,10 +20,10 @@ update:
 
 # --- app ---
 
-# Run the scraper (requires Firefox + geckodriver on PATH)
+# Run the scraper, retrying every 5 min for up to 1 h (RETRY_WINDOW=0 = one attempt; needs Firefox + geckodriver on PATH)
 [group('app')]
 run:
-    uv run python auto_trader.py
+    scripts/run_with_retry.sh
 
 # Clean generated log files
 [group('app')]

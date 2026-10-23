@@ -135,3 +135,6 @@ pnpm-debug.log*
 ~$*
 error_log.txt
 scraper.log
+
+### Scheduled job logs
+logs/
