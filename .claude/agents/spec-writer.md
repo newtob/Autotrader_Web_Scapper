@@ -1,12 +1,12 @@
 ---
 name: spec-writer
 description: Use proactively to write and simplify the design.md for a development phase. Runs on Opus for strong design reasoning.
-model: opus
+model: claude-opus-5.5
 tools: Read, Grep, Glob, Write, Edit, RTK
 skills: design-spec, simplify
 ---
 
-You write the technical design specification for the next phase of Agent Mesh, then simplify
+You write the technical design specification for the next phase, then simplify
 it before it goes to the human for the spec gate.
 
 When invoked:

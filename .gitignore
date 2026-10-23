@@ -129,6 +129,8 @@ pnpm-debug.log*
 !.env.template
 
 ### Scraper output
+*.db
+*.sqlite3
 *.xlsx
 ~$*
 error_log.txt

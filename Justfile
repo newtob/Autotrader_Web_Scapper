@@ -25,11 +25,19 @@ update:
 run:
     uv run python auto_trader.py
 
-# Clean generated output files
+# Clean generated log files
 [group('app')]
 clean:
-    rm -f autotrader_info_*.xlsx error_log.txt
+    rm -f error_log.txt
     rm -f scraper.log
+
+# --- db ---
+
+# Create / sync the database schema (idempotent; local only).
+# Requires DATABASE_URL (see .env.template)
+[group('db')]
+db-init:
+    uv run python db_init.py
 
 # --- quality ---
 
@@ -54,6 +62,11 @@ fix:
     uv run ruff check --fix -q .
     uv run ruff format -q .
 
+# Run the test suite (hermetic: SQLite, no DATABASE_URL needed)
+[group('quality')]
+test:
+    uv run pytest -q
+
 # Run all static-analysis checks (non-mutating)
 [group('quality')]
 check: lint fmt-check typecheck
@@ -74,7 +87,7 @@ semgrep:
 
 # Everything CI runs; fails closed
 [group('ci')]
-ci: sync check pysentry
+ci: sync check test pysentry
 
 # Validate the build: sync, CI checks, and SAST
 [group('ci')]
