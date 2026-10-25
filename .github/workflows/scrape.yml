@@ -1,0 +1,51 @@
+name: Daily scrape
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: scrape
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      MOZ_HEADLESS: "1" # no display on the runner
+      RETRY_WINDOW: "1800"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Show browser versions
+        run: |
+          firefox --version
+          geckodriver --version
+
+      - name: Run scraper
+        run: scripts/run_with_retry.sh
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-logs
+          path: |
+            logs/
+            scraper.log
+            error_log.txt
+          if-no-files-found: ignore
+          retention-days: 7
