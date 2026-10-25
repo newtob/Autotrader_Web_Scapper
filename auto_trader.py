@@ -1,18 +1,20 @@
+import csv
 import json
 import logging
-import os
 import re
 import time
-from datetime import datetime
+from dataclasses import dataclass
 from urllib.parse import quote_plus
 
-import pandas as pd
 from bs4 import BeautifulSoup, Tag
+from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+
+import db
 
 enter_path_of_config_file = r"autotrader_config.csv"
 
@@ -37,27 +39,30 @@ wait: WebDriverWait  # type: ignore[assignment]
 # Outer key: "{Make}_{Model}" (spaces replaced with underscores), e.g. "Porsche_Taycan".
 # Inner dict: canonical extra name → GBP list price.
 EXTRAS_PRICES: dict[str, dict[str, int]] = {}
-# Union of all canonical extra names across every model segment — used for spreadsheet columns.
+# Union of all canonical extra names across every model segment — gates the detail-page visit.
 EXTRA_COLUMNS: list[str] = []
 
 # ---------------------------------------------------------------------------
-# Logging — INFO+ to console, DEBUG+ to scraper.log
+# Logging — INFO+ to console, DEBUG+ to scraper.log (handlers attached by _configure_logging)
 # ---------------------------------------------------------------------------
 log = logging.getLogger("autotrader")
 log.setLevel(logging.DEBUG)
 
-_fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 
-_ch = logging.StreamHandler()
-_ch.setLevel(logging.INFO)
-_ch.setFormatter(_fmt)
+def _configure_logging() -> None:
+    """Attach the console and ``scraper.log`` handlers to the ``autotrader`` logger (idempotent)."""
+    if log.handlers:
+        return
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
 
-_fh = logging.FileHandler("scraper.log", encoding="utf-8")
-_fh.setLevel(logging.DEBUG)
-_fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    fh = logging.FileHandler("scraper.log", encoding="utf-8")
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 
-log.addHandler(_ch)
-log.addHandler(_fh)
+    log.addHandler(ch)
+    log.addHandler(fh)
 
 
 # ---------------------------------------------------------------------------
@@ -66,32 +71,9 @@ log.addHandler(_fh)
 
 
 def _load_extras_prices() -> None:
-    """Populate EXTRAS_PRICES and EXTRA_COLUMNS from extras_prices.json.
-
-    ``extras_prices.json`` is a nested object keyed by ``"{Make}_{Model}"``
-    (spaces replaced with underscores).  Each value is a flat mapping of
-    canonical extra name → GBP list price.  ``EXTRA_COLUMNS`` is built as
-    the ordered union of all extras across every model segment so that the
-    spreadsheet always has a consistent, complete set of columns.
-    """
+    """Populate EXTRAS_PRICES and EXTRA_COLUMNS from extras_prices.json via ``db.load_extras_prices``."""
     global EXTRAS_PRICES, EXTRA_COLUMNS
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extras_prices.json")
-    if not os.path.exists(path):
-        log.warning("extras_prices.json not found at %s — extras feature disabled", path)
-        return
-    with open(path, encoding="utf-8") as f:
-        EXTRAS_PRICES = json.load(f)
-    # Build the union of all extras in insertion order, deduplicating across segments.
-    seen: dict[str, None] = {}
-    for segment in EXTRAS_PRICES.values():
-        for name in segment:
-            seen[name] = None
-    EXTRA_COLUMNS = list(seen.keys())
-    log.info(
-        "Loaded extras_prices.json: %d model segment(s), %d unique extra column(s)",
-        len(EXTRAS_PRICES),
-        len(EXTRA_COLUMNS),
-    )
+    EXTRAS_PRICES, EXTRA_COLUMNS = db.load_extras_prices()
 
 
 def _model_key(make: str, model: str) -> str:
@@ -240,7 +222,7 @@ def get_extras(detail_url: str, active_prices: dict[str, int]) -> tuple[dict[str
 
         # Log all data-testid values present — aids selector diagnosis
         page_soup = BeautifulSoup(driver.page_source, "html.parser")
-        all_testids = sorted({el.get("data-testid") for el in page_soup.select("[data-testid]") if el.get("data-testid")})
+        all_testids = sorted({str(el["data-testid"]) for el in page_soup.select("[data-testid]") if el.get("data-testid")})
         log.debug("get_extras: data-testid values on detail page: %s", all_testids)
 
         # --- Step 1: open "View all specs and features" panel ---
@@ -284,7 +266,7 @@ def get_extras(detail_url: str, active_prices: dict[str, int]) -> tuple[dict[str
 
         # Log updated data-testid values after opening the specs panel
         page_soup = BeautifulSoup(driver.page_source, "html.parser")
-        post_click_testids = sorted({el.get("data-testid") for el in page_soup.select("[data-testid]") if el.get("data-testid")})
+        post_click_testids = sorted({str(el["data-testid"]) for el in page_soup.select("[data-testid]") if el.get("data-testid")})
         log.debug("get_extras: data-testid values after specs click: %s", post_click_testids)
 
         # --- Step 2: expand "Added extras" accordion ---
@@ -392,7 +374,6 @@ def get_total_pages(
     year_to: str,
     radius: str,
     price_to: str,
-    output_file: str,
     page_start: int = 1,
 ) -> None:
     try:
@@ -448,7 +429,7 @@ def get_total_pages(
 
         for page_number in range(page_start, total_pages + 1):
             try:
-                cars_data: list[dict] = []
+                rows: list[db.ListingRow] = []
                 page_url = (
                     f"{base_url}?page={page_number}&fuel-type={encoded_fuel}&make={encoded_make}"
                     f"{model_param}{trim_param}&postcode={postcode}&radius={radius}"
@@ -501,7 +482,7 @@ def get_total_pages(
                     log.debug("Page %d HTML snippet (first 3000 chars):\n%s", page_number, page_html[:3000])
 
                 # --- Pass 1: extract all search-page data (no navigation) ---
-                raw_listings: list[dict] = []
+                raw_listings: list[db.ListingRow] = []
                 for idx, li_element in enumerate(li_elements):
                     title = get_title(li_element)
                     price_text = get_price(li_element)
@@ -545,12 +526,18 @@ def get_total_pages(
 
                     raw_listings.append(
                         {
-                            "Title": title,
-                            "Price": price_text,
-                            "Year": year,
-                            "Miles": miles,
-                            "Fuel_Type": fuel_type,
-                            "_detail_url": detail_url,
+                            "title": title,
+                            "price": price_text,
+                            "year": year,
+                            "miles": miles,
+                            "fuel_type": fuel_type,
+                            "detail_url": detail_url,
+                            "make": make,
+                            "model": model or None,
+                            "model_type": trim or None,
+                            "postcode": postcode,
+                            "extras": {},
+                            "extras_other": "",
                         }
                     )
 
@@ -558,7 +545,7 @@ def get_total_pages(
                 # AutoTrader occasionally returns unrelated makes in search results.
                 # Filter before visiting detail pages to avoid wasting time.
                 before_filter = len(raw_listings)
-                raw_listings = [r for r in raw_listings if _title_matches(r.get("Title") or "", make, model)]
+                raw_listings = [r for r in raw_listings if _title_matches(r["title"] or "", make, model)]
                 skipped = before_filter - len(raw_listings)
                 if skipped:
                     log.info(
@@ -574,26 +561,27 @@ def get_total_pages(
 
                 # --- Pass 2: visit each detail page and collect extras ---
                 for raw in raw_listings:
-                    d_url: str | None = raw.pop("_detail_url")
-                    raw["Detail_URL"] = d_url or ""
+                    d_url = raw["detail_url"]
                     if d_url and EXTRA_COLUMNS:
                         extras_matched, extras_other = get_extras(d_url, active_prices)
-                        raw.update(extras_matched)
-                        raw["Extras_Other"] = extras_other
-                        raw["Extras_Total"] = sum(extras_matched.values())
-                    else:
-                        raw["Extras_Other"] = ""
-                        raw["Extras_Total"] = 0
-                    cars_data.append(raw)
+                        raw["extras"] = extras_matched
+                        raw["extras_other"] = extras_other
+                    rows.append(raw)
 
-                log.info("Page %d: extracted %d raw listings, saving...", page_number, len(cars_data))
-                save_data(output_file, cars_data)
+                log.info("Page %d: extracted %d raw listings, saving...", page_number, len(rows))
+                result = db.save_listings(rows)
+                log.info(
+                    "Page %d: saved=%d skipped=%d attempts=%d succeeded=%s",
+                    page_number,
+                    result.saved,
+                    result.skipped,
+                    result.attempts,
+                    result.succeeded,
+                )
 
             except Exception as e:
                 log.exception("Error processing page %d (%s): %s", page_number, page_url, e)
-                with open("error_log.txt", "a") as log_f:
-                    log_f.write(f"An error occurred: {e}\n")
-                    log_f.write(f"{page_url}\n")
+                db.append_error_log(f"Error processing page {page_number} ({page_url}): {type(e).__name__}: {e}")
 
     except Exception as e:
         log.exception("Fatal error in get_total_pages (make=%r model=%r fuel=%r): %s", make, model, fuel, e)
@@ -747,120 +735,90 @@ def get_price(li_element: Tag) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def get_file_name() -> str:
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return f"autotrader_info_{timestamp}.xlsx"
+@dataclass(frozen=True)
+class SearchConfig:
+    """One row of ``autotrader_config.csv``."""
+
+    postcode: str
+    page_number: int
+    year_from: str
+    year_to: str
+    radius: str
 
 
-def save_data(file: str, cars_data: list[dict]) -> int:
-    """Append *cars_data* to the xlsx file, deduplicating on core columns.
-
-    Returns the number of rows written.
-    """
-    if not cars_data:
-        log.debug("save_data: no data to save")
-        return 0
-
-    core_cols = ["Title", "Price", "Extras_Total", "Year", "Miles", "Fuel_Type", "Detail_URL"]
-    tail_cols = ["Extras_Other"]
-    all_cols = core_cols + EXTRA_COLUMNS + tail_cols
-
-    try:
-        older = pd.read_excel(file)
-    except FileNotFoundError:
-        older = pd.DataFrame(columns=all_cols)
-
-    df = pd.DataFrame(cars_data)
-
-    # Ensure all extra columns are present; fill missing with 0
-    for col in EXTRA_COLUMNS:
-        if col not in df.columns:
-            df[col] = 0
-        if col not in older.columns:
-            older[col] = 0
-
-    for col in tail_cols:
-        if col not in df.columns:
-            df[col] = ""
-        if col not in older.columns:
-            older[col] = ""
-
-    # Ensure Extras_Total and Detail_URL columns are present
-    for col, default in [("Extras_Total", 0), ("Detail_URL", "")]:
-        if col not in df.columns:
-            df[col] = default
-        if col not in older.columns:
-            older[col] = default
-
-    # Recompute Extras_Total from individual extra columns
-    if EXTRA_COLUMNS:
-        df["Extras_Total"] = df[EXTRA_COLUMNS].sum(axis=1).astype(int)
-
-    combined_df = pd.concat([older, df], ignore_index=True)
-    df_dedup = combined_df.drop_duplicates(subset=["Title", "Price", "Year", "Miles", "Fuel_Type"])
-    df_clean = df_dedup.dropna(subset=["Title", "Price"])
-
-    # Reorder to canonical column sequence
-    available = [c for c in all_cols if c in df_clean.columns]
-    extra_found = [c for c in df_clean.columns if c not in all_cols]
-    df_clean = df_clean[available + extra_found]
-
-    row_count = len(df_clean)
-    log.info("save_data: writing %d rows to %s", row_count, file)
-    df_clean.to_excel(file, index=False)
-    return row_count
+def read_config(filename: str) -> list[SearchConfig]:
+    """Read the search configuration CSV (UTF-8, with or without BOM)."""
+    with open(filename, encoding="utf-8-sig", newline="") as f:
+        return [
+            SearchConfig(
+                postcode=row["PostalCode"].strip(),
+                page_number=int(row["PageNumber"]),
+                year_from=row["year-from"].strip(),
+                year_to=row["year-to"].strip(),
+                radius=row["radius"].strip(),
+            )
+            for row in csv.DictReader(f)
+        ]
 
 
 def get_config(filename: str) -> None:
     log.info("Loading config from: %s", filename)
-    df = pd.read_csv(filename)
-    log.info("Config rows: %d", len(df))
-    output_file = get_file_name()
-    log.info("Output file (if data found): %s", output_file)
+    configs = read_config(filename)
+    log.info("Config rows: %d", len(configs))
     makes = get_make_data()
     log.info("Makes loaded: %d", len(makes))
 
-    for row_num, (_index, row) in enumerate(df.iterrows(), start=1):
-        postal_code = row["PostalCode"]
-        page_number = row["PageNumber"]
-        year_from = row["year-from"]
-        year_to = row["year-to"]
-        radius = row["radius"]
+    for row_num, config in enumerate(configs, start=1):
         for make, model, fuel_type, trim, price_to in makes:
             log.info(
                 "Row %d — postcode=%r make=%r model=%r trim=%r fuel=%r years=%s–%s radius=%s price-to=%s start_page=%s",
                 row_num,
-                postal_code,
+                config.postcode,
                 make,
                 model or "(all)",
                 trim or "(all)",
                 fuel_type,
-                year_from,
-                year_to,
-                radius,
+                config.year_from,
+                config.year_to,
+                config.radius,
                 price_to or "(any)",
-                page_number,
+                config.page_number,
             )
             time.sleep(1)
             get_total_pages(
-                postal_code,
+                config.postcode,
                 make,
                 model,
                 trim,
                 fuel_type,
-                str(year_from),
-                str(year_to),
-                str(radius),
+                config.year_from,
+                config.year_to,
+                config.radius,
                 price_to,
-                output_file,
-                int(page_number),
+                config.page_number,
             )
 
-    if os.path.exists(output_file):
-        saved_df = pd.read_excel(output_file)
-        log.info("Scrape complete. %d car(s) saved to %s", len(saved_df), output_file)
-    else:
-        log.info("Scrape complete. 0 cars scraped — no output file created.")
+    _log_scrape_summary()
+
+
+def _log_scrape_summary() -> None:
+    """Log the end-of-run row count; a failing count (e.g. dropped pooler) is only a WARNING."""
+    total = None
+    for attempt in (1, 2):
+        try:
+            db.database.connect(reuse_if_open=True)
+            total = db.Listing.select().count()
+            break
+        except Exception as exc:
+            if attempt == 1:
+                try:
+                    db.database.close()
+                except Exception:
+                    log.debug("close before summary reconnect failed", exc_info=True)
+                continue
+            log.warning("Scrape complete, but the final listing count failed: %s", type(exc).__name__)
+            return
+    log.info("Scrape complete. %d listing(s) in database", total)
 
 
 # ---------------------------------------------------------------------------
@@ -870,22 +828,38 @@ def get_config(filename: str) -> None:
 
 def main() -> None:
     global driver, wait
+    _configure_logging()
+    load_dotenv()
     log.info("Starting AutoTrader scraper")
-    _load_extras_prices()
-    options = Options()
-    # 'eager' fires after DOMContentLoaded — avoids hanging on ad/tracking resources
-    options.page_load_strategy = "eager"
-    driver = webdriver.Firefox(options=options)
-    driver.maximize_window()
-    wait = WebDriverWait(driver, 360)
     try:
-        setup_cookies()
-        get_config(enter_path_of_config_file)
+        db.init_db()
+        _load_extras_prices()
+        options = Options()
+        # 'eager' fires after DOMContentLoaded — avoids hanging on ad/tracking resources
+        options.page_load_strategy = "eager"
+        driver = webdriver.Firefox(options=options)
+        driver.maximize_window()
+        wait = WebDriverWait(driver, 360)
+        try:
+            setup_cookies()
+            get_config(enter_path_of_config_file)
+        finally:
+            log.info("Quitting browser")
+            driver.quit()
     finally:
-        log.info("Quitting browser")
-        driver.quit()
+        db.close_db()
     log.info("DONE")
 
 
+def cli() -> int:
+    """Run ``main()`` and turn expected setup/database failures into a log line and exit code 1."""
+    try:
+        main()
+    except (db.ConfigError, db.SchemaError, db.DatabaseUnavailableError) as exc:
+        log.error("%s", exc)
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(cli())

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" || exit 2; files=$({ git diff HEAD --name-only --diff-filter=d; git ls-files --others --exclude-standard; } | sort -u); [ -z \"$files\" ] && exit 0; if command -v rtk >/dev/null 2>&1; then rtk prek run -q --files $files; else prek run -q --files $files; fi >&2 || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}

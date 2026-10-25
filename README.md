@@ -1,6 +1,6 @@
 # AutoTrader UK Web Scraper
 
-A scraper for [autotrader.co.uk](https://www.autotrader.co.uk) that searches for car listingsand extracts details by viewing each car's individual advert page. It also collect optional extras, and ouputs results to a timestamped `.xlsx` spreadsheet.
+A scraper for [autotrader.co.uk](https://www.autotrader.co.uk) that searches for car listingsand extracts details by viewing each car's individual advert page. It also collects optional extras, and stores results in a Postgres database (Supabase) through the Peewee ORM.
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](http://creativecommons.org/licenses/by-nc/4.0/)
 
@@ -11,9 +11,9 @@ A scraper for [autotrader.co.uk](https://www.autotrader.co.uk) that searches for
 - Configurable searches by postcode, year range, radius, make, model, trim, fuel type, and maximum price
 - Infinite-scroll page loading — all listings on each results page are fully loaded before parsing
 - Per-listing detail-page scraping — visits each advert to extract the "Added extras" section
-- Extras matched against a per-model price table (`extras_prices.json`) and totalled in a dedicated column
+- Extras matched against a per-model price table (`extras_prices.json`) and totalled in a dedicated column (53 extras for the Porsche Taycan, 2026; the database columns are derived from `extras_prices.json`)
 - Structured logging to console (`INFO+`) and `scraper.log` (`DEBUG`)
-- Deduplication and `NaN`-dropping on save; output is appended across pages within a single run
+- Results are upserted into a `listing` table keyed on the AutoTrader advert id, tracking `first_found`, `last_found` and `days_live`
 
 ---
 
@@ -107,7 +107,7 @@ To search for multiple cars, append additional objects to the array:
 
 ### `extras_prices.json`
 
-Maps optional extras to their GBP list prices, grouped by `"{Make}_{Model}"` key. When the scraper visits a car's advert page it matches the "Added extras" section against this table. Matched items get individual columns with the list price; unmatched items are captured in `Extras_Other`.
+Maps optional extras to their GBP list prices, grouped by `"{Make}_{Model}"` key. When the scraper visits a car's advert page it matches the "Added extras" section against this table. Matched items get individual columns with the list price; unmatched items are captured in `extras_other`.
 
 ```json
 {
@@ -127,17 +127,27 @@ The key format is `"{uriValue}_{model}"` with spaces replaced by underscores. If
 
 ---
 
+## Database setup
+
+Results are stored in a Postgres database (Supabase transaction-mode pooler). `DATABASE_URL` is read from the environment only.
+
+```bash
+cp .env.template .env
+# edit .env and set DATABASE_URL (never commit it)
+just db-init
+```
+
+`just db-init` creates the `listing` table and adds any missing extras columns. It is idempotent and additive-only; run it again whenever `extras_prices.json` gains entries. The scraper itself never changes the schema and fails fast, pointing at `just db-init`, if the table is out of date. `sqlite:///local.db` is accepted for local testing only.
+
+---
+
 ## Running
 
 ```bash
 just run
 ```
 
-Firefox will open automatically. The scraper logs progress to the console and writes full debug output to `scraper.log`. Output is written to a timestamped file:
-
-```
-autotrader_info_YYYY-MM-DD_HH-MM-SS.xlsx
-```
+Firefox will open automatically. The scraper logs progress to the console and writes full debug output to `scraper.log`. Listings are upserted into the database; no spreadsheet is produced.
 
 ---
 
@@ -146,30 +156,32 @@ autotrader_info_YYYY-MM-DD_HH-MM-SS.xlsx
 | Command | Description |
 |---|---|
 | `just sync` | Install / sync dependencies via `uv` |
-| `just run` | Run the scraper (requires Firefox + geckodriver on `PATH`) |
+| `just run` | Run the scraper (requires Firefox + geckodriver on `PATH` and `DATABASE_URL`) |
+| `just db-init` | Create / sync the database schema (requires `DATABASE_URL`) |
+| `just test` | Run the test suite (SQLite, no network) |
 | `just check` | Run all static-analysis checks (lint + format + typecheck) |
 | `just lint` | Ruff lint — report only, no changes |
 | `just fix` | Auto-fix lint issues and reformat with Ruff |
 | `just typecheck` | Type-check with `ty` |
 | `just pysentry` | Dependency security scan with `pysentry-rs` |
-| `just clean` | Remove generated `.xlsx` files and `scraper.log` |
+| `just clean` | Remove `error_log.txt` and `scraper.log` |
 | `just update` | Upgrade all dependencies to latest compatible versions |
 
 ---
 
-## Output Spreadsheet Columns
+## Database table: `listing`
 
 | Column | Description |
 |---|---|
-| `Title` | Car title from the listing |
-| `Price` | Asking price (£) |
-| `Extras_Total` | Sum of matched optional extras list prices (£) |
-| `Year` | Registration year |
-| `Miles` | Mileage |
-| `Fuel_Type` | Fuel type |
-| `Detail_URL` | Direct link to the AutoTrader advert page |
-| *(one column per extra)* | GBP list price if the extra is present on this car, otherwise `0` |
-| `Extras_Other` | Comma-separated extras found on the car but absent from `extras_prices.json` |
+| `id` | Surrogate primary key |
+| `ad_key` | AutoTrader advert id (15 digits) — the unique upsert identity; `nokey_<sha1>` when the URL has none |
+| `title`, `price_gbp`, `year`, `miles`, `fuel_type`, `detail_url` | Listing data from the search page |
+| `make`, `model`, `model_type`, `postcode` | Search context |
+| `extras_total` | Sum of matched optional extras list prices (£) |
+| `extras_other` | Comma-separated extras found on the car but absent from `extras_prices.json` |
+| `first_found`, `last_found` | UTC timestamps of first and latest sighting (`first_found` is never overwritten) |
+| `days_live` | Whole days between `first_found` and `last_found` |
+| *(one column per extra)* | snake_case of the `extras_prices.json` key; GBP list price if present on this car, otherwise `0` |
 
 ---
 
@@ -177,7 +189,12 @@ autotrader_info_YYYY-MM-DD_HH-MM-SS.xlsx
 
 ```
 Autotrader_Web_Scapper/
-├── auto_trader.py          # Entire scraper — all logic in one file
+├── auto_trader.py          # Scraper — Selenium scraping and orchestration
+├── db.py                   # Peewee model, schema check, upsert with retry
+├── db_init.py              # `just db-init` schema provisioning
+├── tests/                  # pytest suite (SQLite, hermetic)
+├── .env.template           # Documents DATABASE_URL (copy to .env)
+├── TECH_DEBT.md            # Known constraints and deferred work
 ├── make.json               # ✏️ Edit: search targets (make, model, fuel, trim, price ceiling)
 ├── extras_prices.json      # ✏️ Edit: per-model optional extras price tables
 ├── autotrader_config.csv   # ✏️ Edit: postcode, year range, radius, start page

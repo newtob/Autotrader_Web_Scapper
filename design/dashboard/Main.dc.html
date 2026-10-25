@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Autotrader used car prices</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:#F4F6F9;color:var(--ink)}
+button{font-family:inherit}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+</style>
+</helmet>
+<div style="{{th.vars}} background: var(--bg); color: var(--ink); min-height: 1720px">
+<div style="max-width: 1120px; margin: 0 auto; box-sizing: border-box; padding: 56px 24px 72px; display: flex; flex-direction: column; gap: 32px">
+
+<header style="display: flex; flex-direction: column; gap: 12px">
+<div role="group" aria-label="Colour theme" style="align-self: flex-end; display: flex; background: var(--card); border: 1px solid var(--border2); border-radius: 10px; padding: 4px; gap: 4px">
+<sc-for list="{{themes}}" as="m" hint-placeholder-count="2">
+<button type="button" aria-pressed="{{m.pressed}}" onClick="{{m.pick}}" style="{{m.style}}">{{m.label}}</button>
+</sc-for>
+</div>
+<h1style="margin: 0; font-size: 44px; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; color: var(--ink)">Autotrader used car prices</h1>
+<p style="margin: 0; font-size: 18px; line-height: 1.5; color: var(--muted); max-width: 640px">Autotrader is scraped every day for used cars that fit the description</p>
+</header>
+
+<section aria-label="Search details" style="box-sizing: border-box; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted)">Currently searching for</h2>
+<sc-for list="{{searches}}" as="s" hint-placeholder-count="1">
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink2)">{{s.text}}</p>
+</sc-for>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-size: 22px; font-weight: 600; color: var(--ink)">Market trends</h2>
+<div role="group" aria-label="Time period" style="display: flex; background: var(--card); border: 1px solid var(--border2); border-radius: 10px; padding: 4px; gap: 4px">
+<sc-for list="{{ranges}}" as="r" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{r.pressed}}" onClick="{{r.pick}}" style="{{r.style}}">{{r.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<section aria-labelledby="c1" style="box-sizing: border-box; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h3 id="c1" style="margin: 0; font-size: 18px; font-weight: 600">Cars on the market</h3>
+<p style="margin: 0; font-size: 14px; color: var(--muted)">Listings matching the search, per day</p>
+</div>
+<div style="display: flex; align-items: baseline; gap: 8px; background: {{c1.badgeBg}}; color: {{c1.badgeFg}}; border-radius: 999px; padding: 8px 16px">
+<span style="font-size: 22px; font-weight: 700">{{c1.change}}</span>
+<span style="font-size: 14px; font-weight: 500">{{c1.changeLabel}}</span>
+</div>
+</div>
+<svg viewBox="0 0 640 240" role="img" aria-label="Line chart of the number of cars on the market over the selected period" style="width: 100%; height: auto; display: block">
+<sc-for list="{{c1.yTicks}}" as="t" hint-placeholder-count="4">
+<line x1="56" x2="632" y1="{{t.y}}" y2="{{t.y}}" stroke="var(--grid)" stroke-width="1"></line>
+<text x="48" y="{{t.ty}}" text-anchor="end" font-size="11" fill="var(--muted)">{{t.label}}</text>
+</sc-for>
+<path d="{{c1.area}}" fill="var(--accent)" fill-opacity="0.10"></path>
+<path d="{{c1.line}}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>
+<text x="56" y="232" font-size="11" fill="var(--muted)">{{xStart}}</text>
+<text x="632" y="232" text-anchor="end" font-size="11" fill="var(--muted)">{{xEnd}}</text>
+</svg>
+</section>
+
+<section aria-labelledby="c2" style="box-sizing: border-box; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h3 id="c2" style="margin: 0; font-size: 18px; font-weight: 600">Average price</h3>
+<p style="margin: 0; font-size: 14px; color: var(--muted)">Mean asking price in GBP, per day</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 8px">
+<span style="font-size: 22px; font-weight: 700">{{c2.latest}}</span>
+<span style="font-size: 14px; color: var(--muted)">latest</span>
+</div>
+<div style="display: flex; align-items: baseline; gap: 8px; background: {{c2.badgeBg}}; color: {{c2.badgeFg}}; border-radius: 999px; padding: 8px 16px">
+<span style="font-size: 22px; font-weight: 700">{{c2.change}}</span>
+<span style="font-size: 14px; font-weight: 500">{{c2.changeLabel}}</span>
+</div>
+</div>
+</div>
+<svg viewBox="0 0 640 240" role="img" aria-label="Line chart of the average price in pounds over the selected period" style="width: 100%; height: auto; display: block">
+<sc-for list="{{c2.yTicks}}" as="t" hint-placeholder-count="4">
+<line x1="56" x2="632" y1="{{t.y}}" y2="{{t.y}}" stroke="var(--grid)" stroke-width="1"></line>
+<text x="48" y="{{t.ty}}" text-anchor="end" font-size="11" fill="var(--muted)">{{t.label}}</text>
+</sc-for>
+<path d="{{c2.area}}" fill="var(--accent)" fill-opacity="0.10"></path>
+<path d="{{c2.line}}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>
+<text x="56" y="232" font-size="11" fill="var(--muted)">{{xStart}}</text>
+<text x="632" y="232" text-anchor="end" font-size="11" fill="var(--muted)">{{xEnd}}</text>
+</svg>
+</section>
+
+<section aria-labelledby="c3" style="box-sizing: border-box; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h3 id="c3" style="margin: 0; font-size: 18px; font-weight: 600">Average days live</h3>
+<p style="margin: 0; font-size: 14px; color: var(--muted)">Mean days on sale across all cars listed that day</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 8px">
+<span style="font-size: 22px; font-weight: 700">{{c3.latest}}</span>
+<span style="font-size: 14px; color: var(--muted)">latest</span>
+</div>
+<div style="display: flex; align-items: baseline; gap: 8px; background: {{c3.badgeBg}}; color: {{c3.badgeFg}}; border-radius: 999px; padding: 8px 16px">
+<span style="font-size: 22px; font-weight: 700">{{c3.change}}</span>
+<span style="font-size: 14px; font-weight: 500">{{c3.changeLabel}}</span>
+</div>
+</div>
+</div>
+<svg viewBox="0 0 640 240" role="img" aria-label="Line chart of the average days live over the selected period" style="width: 100%; height: auto; display: block">
+<sc-for list="{{c3.yTicks}}" as="t" hint-placeholder-count="4">
+<line x1="56" x2="632" y1="{{t.y}}" y2="{{t.y}}" stroke="var(--grid)" stroke-width="1"></line>
+<text x="48" y="{{t.ty}}" text-anchor="end" font-size="11" fill="var(--muted)">{{t.label}}</text>
+</sc-for>
+<path d="{{c3.area}}" fill="var(--accent)" fill-opacity="0.10"></path>
+<path d="{{c3.line}}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>
+<text x="56" y="232" font-size="11" fill="var(--muted)">{{xStart}}</text>
+<text x="632" y="232" text-anchor="end" font-size="11" fill="var(--muted)">{{xEnd}}</text>
+</svg>
+</section>
+
+<p style="margin: 0; font-size: 13px; color: var(--muted)">Chart values are placeholder data for this design; the live page reads the daily scrape from the database.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1720}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { range: 'month', theme: 'dark' };
+  }
+
+  series(n, base, amp, drift, phase) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      out.push(base + drift * (i / (n - 1)) + amp * Math.sin(i / 6 + phase) + (amp / 3) * Math.sin(i / 2.3 + phase * 2));
+    }
+    return out;
+  }
+
+  badge(c, values, dark, noun, period) {
+    const pct = ((values[values.length - 1] - values[0]) / values[0]) * 100;
+    const down = pct < 0;
+    c.change = (down ? '−' : '+') + Math.round(Math.abs(pct)) + '%';
+    c.changeLabel = noun + ' ' + period;
+    c.badgeBg = dark ? (down ? '#4A2A10' : '#12304F') : (down ? '#FFEBD6' : '#DCEBFF');
+    c.badgeFg = dark ? (down ? '#FFD2A8' : '#BBDDFF') : (down ? '#7A2E05' : '#0A3F7A');
+  }
+
+  fmtDate(offsetDays) {
+    const d = new Date(Date.UTC(2026, 9, 23));
+    d.setUTCDate(d.getUTCDate() - offsetDays);
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  chart(values, fmt) {
+    const L = 56, R = 632, T = 16, B = 208;
+    const min = Math.min(...values), max = Math.max(...values);
+    const pad = (max - min || 1) * 0.15;
+    const lo = min - pad, hi = max + pad;
+    const x = (i) => L + (R - L) * (i / (values.length - 1));
+    const y = (v) => B - (B - T) * ((v - lo) / (hi - lo));
+    const line = values.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+    const area = line + ' L' + R + ' ' + B + ' L' + L + ' ' + B + ' Z';
+    const yTicks = [0, 1, 2, 3].map((k) => {
+      const v = lo + ((hi - lo) * k) / 3;
+      return { y: y(v).toFixed(1), ty: (y(v) + 4).toFixed(1), label: fmt(v) };
+    });
+    return { line, area, yTicks };
+  }
+
+  renderVals() {
+    const range = this.state.range;
+    const days = { month: 30, year: 365, all: 400 }[range];
+    const names = { month: 'this month', year: 'this year', all: 'all time' };
+    const pick = (k) => () => this.setState({ range: k });
+    const dark = this.state.theme === 'dark';
+    const th = {
+      vars: dark
+        ? '--bg:#0B1220;--card:#131C2E;--panel:#0F1828;--border:#26324A;--border2:#34425F;--ink:#E8EEF9;--ink2:#C9D4E6;--muted:#9AA9C2;--grid:#26324A;--accent:#5EA2F0;--sel:#5EA2F0;--selText:#0B1220;'
+        : '--bg:#F4F6F9;--card:#FFFFFF;--panel:#EBEFF5;--border:#D5DCE7;--border2:#C5CEDC;--ink:#0B1B33;--ink2:#1F2D44;--muted:#44546A;--grid:#E3E8F0;--accent:#0A5CAD;--sel:#0B2A5B;--selText:#FFFFFF;'
+    };
+    const btn = (on) => 'min-height: 44px; min-width: 88px; padding: 0 16px; border: 0; border-radius: 7px; cursor: pointer; font-size: 15px; font-weight: 600; background: ' + (on ? 'var(--sel)' : 'transparent') + '; color: ' + (on ? 'var(--selText)' : 'var(--ink2)');
+    const themes = [['light', 'Light'], ['dark', 'Dark']].map(([k, label]) => ({
+      label,
+      pressed: this.state.theme === k ? 'true' : 'false',
+      pick: () => this.setState({ theme: k }),
+      style: btn(this.state.theme === k)
+    }));
+    const ranges = [['month', 'Month'], ['year', 'Year'], ['all', 'All time']].map(([k, label]) => ({
+      label,
+      pressed: range === k ? 'true' : 'false',
+      pick: pick(k),
+      style: btn(range === k)
+    }));
+
+    const allCount = this.series(400, 52, 5, -9, 0.4).map(Math.round);
+    const allPrice = this.series(400, 43500, 900, -2600, 1.1).map(Math.round);
+    const allDays = this.series(400, 31, 3, 6, 2.0).map(Math.round);
+    const cut = (a) => a.slice(a.length - days);
+
+    const cnt = cut(allCount);
+    const c1 = this.chart(cnt, (v) => String(Math.round(v)));
+    const pct = ((cnt[cnt.length - 1] - cnt[0]) / cnt[0]) * 100;
+    const rounded = Math.round(Math.abs(pct));
+    const down = pct < 0;
+    c1.change = (down ? '−' : '+') + rounded + '%';
+    c1.changeLabel = (down ? 'fewer cars ' : 'more cars ') + names[range];
+    c1.badgeBg = dark ? (down ? '#4A2A10' : '#12304F') : (down ? '#FFEBD6' : '#DCEBFF');
+    c1.badgeFg = dark ? (down ? '#FFD2A8' : '#BBDDFF') : (down ? '#7A2E05' : '#0A3F7A');
+
+    const pr = cut(allPrice);
+    const c2 = this.chart(pr, (v) => '£' + Math.round(v).toLocaleString('en-GB'));
+    c2.latest = '£' + pr[pr.length - 1].toLocaleString('en-GB');
+    this.badge(c2, pr, dark, 'average price', names[range]);
+
+    const dl = cut(allDays);
+    const c3 = this.chart(dl, (v) => String(Math.round(v)));
+    c3.latest = dl[dl.length - 1] + ' days';
+    this.badge(c3, dl, dark, 'average days live', names[range]);
+
+    const data = [{ displayName: 'Porsche', model: 'Taycan', aggregatedTrim: '4S', priceTo: 42000 }];
+    const searches = data.map((d) => ({
+      text: d.displayName + ' ' + d.model + ', ' + d.aggregatedTrim + ', up to: £' + d.priceTo.toLocaleString('en-GB')
+    }));
+
+    return { th, themes, searches, ranges, c1, c2, c3, xStart: this.fmtDate(days - 1), xEnd: this.fmtDate(0) };
+  }
+}
+</script>
+</body>
+</html>
