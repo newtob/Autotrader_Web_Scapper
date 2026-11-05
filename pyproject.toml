@@ -32,3 +32,6 @@ python = ".venv"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.uv]
+exclude-newer = "3 days"
