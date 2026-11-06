@@ -1,13 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "services": {
-    "api": {
+    "prices": {
       "root": ".",
-      "runtime": "rust",
-      "functions": {
-        "api/prices.rs": { "maxDuration": 10 },
-        "api/searches.rs": { "maxDuration": 10 }
-      }
+      "entrypoint": "api/prices.rs",
+      "functions": { "api/prices.rs": { "maxDuration": 10 } }
+    },
+    "searches": {
+      "root": ".",
+      "entrypoint": "api/searches.rs",
+      "functions": { "api/searches.rs": { "maxDuration": 10 } }
     },
     "web": {
       "root": "web",
@@ -16,7 +18,8 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/api/prices", "destination": { "service": "prices" } },
+    { "source": "/api/searches", "destination": { "service": "searches" } },
     { "source": "/(.*)", "destination": { "service": "web" } }
   ]
 }
