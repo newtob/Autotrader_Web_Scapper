@@ -291,7 +291,7 @@ class DailyStat(BaseModel):
     avg_days_live = peewee.DecimalField(max_digits=6, decimal_places=1, null=True)
     computed_at = UtcDateTimeField()
 
-    class Meta:
+    class Meta:  # ty: ignore[invalid-attribute-override]
         table_name = DAILY_TABLE_NAME
         indexes = ((("stat_date", "make", "model", "model_type"), True),)
 
