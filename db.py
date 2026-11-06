@@ -17,7 +17,8 @@ import re
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, TypedDict, cast
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
@@ -37,6 +38,7 @@ ALLOWED_URL_SCHEMES: tuple[str, ...] = ("postgres", "postgresql", "sqlite")
 ERROR_LOG_PATH = Path("error_log.txt")
 EXTRAS_PRICES_PATH = Path(__file__).resolve().parent / "extras_prices.json"
 TABLE_NAME = "listing"
+DAILY_TABLE_NAME = "daily_stats"
 FALLBACK_KEY_PREFIX = "nokey_"
 
 FIXED_COLUMNS: tuple[str, ...] = (
@@ -106,6 +108,18 @@ class ListingRow(TypedDict):
     postcode: str
     extras: dict[str, int]
     extras_other: str
+
+
+class DailyStatRow(TypedDict):
+    """One ``daily_stats`` row: a UTC day's snapshot for one search."""
+
+    stat_date: date
+    make: str
+    model: str
+    model_type: str
+    car_count: int
+    avg_price_gbp: int | None
+    avg_days_live: Decimal | None
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +278,24 @@ def _build_listing_model() -> type[ListingBase]:
 Listing: type[ListingBase] = _build_listing_model()
 
 
+class DailyStat(BaseModel):
+    """Average price, car count and days-live per UTC day and search (``make``, ``model``, ``model_type``)."""
+
+    id = peewee.AutoField()
+    stat_date = peewee.DateField()
+    make = peewee.CharField()
+    model = peewee.CharField(default="")
+    model_type = peewee.CharField(default="")
+    car_count = peewee.IntegerField()
+    avg_price_gbp = peewee.IntegerField(null=True)
+    avg_days_live = peewee.DecimalField(max_digits=6, decimal_places=1, null=True)
+    computed_at = UtcDateTimeField()
+
+    class Meta:
+        table_name = DAILY_TABLE_NAME
+        indexes = ((("stat_date", "make", "model", "model_type"), True),)
+
+
 # ---------------------------------------------------------------------------
 # Configuration and connection
 # ---------------------------------------------------------------------------
@@ -338,17 +370,18 @@ def bind_database(db: peewee.Database) -> None:
 
 
 def check_schema() -> None:
-    """Read-only check that the live table has every model column.
+    """Read-only check that the live tables have every model column.
 
     Raises:
-        SchemaError: If the table or any model column is missing. Orphan columns are allowed.
+        SchemaError: If a table or any model column is missing. Orphan columns are allowed.
     """
-    if not database.table_exists(TABLE_NAME):
-        raise SchemaError(f"Table {TABLE_NAME!r} does not exist. Run `just db-init` to create it.")
-    live = {c.name for c in database.get_columns(TABLE_NAME)}
-    missing = [f.column_name for f in Listing._meta.sorted_fields if f.column_name not in live]
-    if missing:
-        raise SchemaError(f"Table {TABLE_NAME!r} is missing column(s): {', '.join(missing)}. Run `just db-init` to add them.")
+    for table_name, model in ((TABLE_NAME, Listing), (DAILY_TABLE_NAME, DailyStat)):
+        if not database.table_exists(table_name):
+            raise SchemaError(f"Table {table_name!r} does not exist. Run `just db-init` to create it.")
+        live = {c.name for c in database.get_columns(table_name)}
+        missing = [f.column_name for f in model._meta.sorted_fields if f.column_name not in live]
+        if missing:
+            raise SchemaError(f"Table {table_name!r} is missing column(s): {', '.join(missing)}. Run `just db-init` to add them.")
 
 
 _HINTS = (
@@ -645,5 +678,67 @@ def save_listings(
         if attempt > 1:
             logger.info("Database write succeeded after retry: retry_count=%d", attempt - 1)
         return SaveResult(True, attempt, saved, skipped)
+
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _write_daily_batch(rows: Sequence[DailyStatRow], now: datetime) -> int:
+    """Upsert *rows* on ``(stat_date, make, model, model_type)`` inside one transaction."""
+    with database.atomic():
+        for fields in rows:
+            (
+                DailyStat.insert(**fields, computed_at=now)
+                .on_conflict(
+                    conflict_target=[DailyStat.stat_date, DailyStat.make, DailyStat.model, DailyStat.model_type],
+                    update={
+                        DailyStat.car_count: fields["car_count"],
+                        DailyStat.avg_price_gbp: fields["avg_price_gbp"],
+                        DailyStat.avg_days_live: fields["avg_days_live"],
+                        DailyStat.computed_at: now,
+                    },
+                )
+                .execute()
+            )
+    return len(rows)
+
+
+def save_daily_stats(
+    rows: Sequence[DailyStatRow],
+    *,
+    clock: Callable[[], datetime] = utc_now,
+    sleep: Callable[[float], None] = time.sleep,
+    error_log_path: Path | str = ERROR_LOG_PATH,
+) -> SaveResult:
+    """Upsert daily stats on their unique key, retrying on connection errors.
+
+    Re-saving the same day overwrites that day's rows; it never creates duplicates.
+
+    Args:
+        rows: Rows to write.
+        clock: Returns the current UTC time; read once per attempt.
+        sleep: Called with the backoff between attempts.
+        error_log_path: File that receives a line when retries are exhausted.
+
+    Returns:
+        A ``SaveResult`` (``skipped`` is always 0). Retryable failures are logged and returned, not raised.
+    """
+    if not rows:
+        return SaveResult(True, 0, 0, 0)
+
+    for attempt in range(1, MAX_DB_ATTEMPTS + 1):
+        try:
+            if attempt > 1:
+                database.close()
+                database.connect(reuse_if_open=True)
+            saved = _write_daily_batch(rows, clock())
+        except RETRYABLE_EXCEPTIONS as exc:
+            logger.warning("Daily stats write failed on attempt %d/%d: %s", attempt, MAX_DB_ATTEMPTS, type(exc).__name__)
+            if attempt < MAX_DB_ATTEMPTS:
+                sleep(backoff_seconds(attempt))
+                continue
+            logger.exception("Daily stats write failed after %d attempts; skipping %d row(s)", MAX_DB_ATTEMPTS, len(rows))
+            append_error_log(f"save_daily_stats gave up after {MAX_DB_ATTEMPTS} attempts: {type(exc).__name__}: {exc}", error_log_path)
+            return SaveResult(False, MAX_DB_ATTEMPTS, 0, 0)
+        return SaveResult(True, attempt, saved, 0)
 
     raise AssertionError("unreachable")  # pragma: no cover

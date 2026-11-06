@@ -1,0 +1,33 @@
+[package]
+name = "autotrader-prices-api"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[lib]
+name = "prices_api"
+path = "api-rs/src/lib.rs"
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "macros"] }
+tokio = { version = "1.54.1", features = ["full"] }
+url = "2.5.8"
+vercel_runtime = { version = "2.4.1" }
+
+# Each Vercel handler is a [[bin]]; the logic lives in the `prices_api` library (api-rs/).
+[[bin]]
+name = "prices"
+path = "api/prices.rs"
+
+[[test]]
+name = "db_integration"
+path = "api-rs/tests/db_integration.rs"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3

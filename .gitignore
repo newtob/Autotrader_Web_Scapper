@@ -138,3 +138,10 @@ scraper.log
 
 ### Scheduled job logs
 logs/
+
+web/node_modules/
+web/dist/
+.vercel/
+
+# Rust
+target/

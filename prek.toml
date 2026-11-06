@@ -21,6 +21,7 @@ exclude = '^(\.vscode/.*\.json|ui/tsconfig\.(app|node)\.json)$'
 
 [[repos.hooks]]
 id = "check-added-large-files"
+args = ["--maxkb=900"]
 
 [[repos.hooks]]
 id = "check-merge-conflict"

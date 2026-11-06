@@ -4,6 +4,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from urllib.parse import quote_plus
 
 from bs4 import BeautifulSoup, Tag
@@ -15,6 +16,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 import db
+import stats
 
 enter_path_of_config_file = r"autotrader_config.csv"
 
@@ -46,6 +48,9 @@ EXTRA_COLUMNS: list[str] = []
 # Logging — INFO+ to console, DEBUG+ to scraper.log (handlers attached by _configure_logging)
 # ---------------------------------------------------------------------------
 log = logging.getLogger("autotrader")
+
+# Searches whose scrape raised before finishing; they get no daily_stats row this run.
+_FAILED_SEARCHES: set[stats.SearchKey] = set()
 log.setLevel(logging.DEBUG)
 
 
@@ -584,6 +589,7 @@ def get_total_pages(
                 db.append_error_log(f"Error processing page {page_number} ({page_url}): {type(e).__name__}: {e}")
 
     except Exception as e:
+        _FAILED_SEARCHES.add((make, model or "", trim or ""))
         log.exception("Fatal error in get_total_pages (make=%r model=%r fuel=%r): %s", make, model, fuel, e)
 
 
@@ -798,7 +804,19 @@ def get_config(filename: str) -> None:
                 config.page_number,
             )
 
+    _save_daily_stats()
     _log_scrape_summary()
+
+
+def _save_daily_stats() -> None:
+    """Write today's per-search averages to ``daily_stats``; any failure is only a WARNING."""
+    try:
+        db.database.connect(reuse_if_open=True)
+        rows = stats.compute_daily_stats(datetime.now(UTC).date(), skip=_FAILED_SEARCHES)
+        result = db.save_daily_stats(rows)
+        log.info("Daily stats: %d row(s) saved, succeeded=%s", result.saved, result.succeeded)
+    except Exception as exc:
+        log.warning("Daily stats were not saved: %s", type(exc).__name__)
 
 
 def _log_scrape_summary() -> None:

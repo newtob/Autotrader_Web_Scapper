@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-11-05T06:14:02Z",
+  "searches": [
+    {
+      "make": "Porsche",
+      "model": "Taycan",
+      "model_type": "4S",
+      "series": [
+        { "date": "2026-10-29", "count": 50, "avg_price_gbp": 43500, "avg_days_live": 30 },
+        { "date": "2026-10-30", "count": 51, "avg_price_gbp": 43410, "avg_days_live": 31 },
+        { "date": "2026-11-02", "count": 52, "avg_price_gbp": 44100, "avg_days_live": 32 },
+        { "date": "2026-11-04", "count": 52, "avg_price_gbp": 44820, "avg_days_live": 33 }
+      ]
+    },
+    { "make": "Porsche", "model": "Macan", "series": [] }
+  ]
+}

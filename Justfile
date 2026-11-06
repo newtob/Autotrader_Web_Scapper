@@ -31,6 +31,32 @@ clean:
     rm -f error_log.txt
     rm -f scraper.log
 
+# --- web ---
+
+# Run the price gallery dev server (add ?fixture to the URL to use local sample data)
+[group('web')]
+web-dev:
+    cd web && npm run dev
+
+# Build the price gallery to web/dist
+[group('web')]
+web-build:
+    cd web && npm run build
+
+# Run the price gallery unit tests and type check
+[group('web')]
+web-test:
+    cd web && npm test && npm run check
+
+# --- rust api ---
+
+# Format check, clippy and tests for the Rust prices API (set TEST_DATABASE_URL to a throwaway Postgres to include DB tests)
+[group('rust')]
+rust-check:
+    cargo fmt --check
+    cargo clippy --all-targets -- -D warnings
+    cargo test -- --test-threads=1
+
 # --- db ---
 
 # Create / sync the database schema (idempotent; local only).
@@ -38,6 +64,12 @@ clean:
 [group('db')]
 db-init:
     uv run python db_init.py
+
+# Backfill daily_stats from existing listings (idempotent)
+# Requires DATABASE_URL and a prior `just db-init`
+[group('db')]
+db-backfill:
+    uv run python backfill_stats.py
 
 # --- quality ---
 

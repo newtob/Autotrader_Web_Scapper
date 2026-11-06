@@ -1,4 +1,4 @@
-"""Create and sync the ``listing`` schema (local, idempotent, additive-only).
+"""Create and sync the ``listing`` and ``daily_stats`` schema (local, idempotent, additive-only).
 
 Run with ``just db-init``. Requires ``DATABASE_URL`` (see ``.env.template``).
 """
@@ -27,12 +27,13 @@ class SyncReport:
     created_table: bool
     added_columns: list[str]
     orphan_columns: list[str]
+    created_daily_table: bool = False
 
 
 def sync_schema(database: peewee.Database) -> SyncReport:
     """Bring the live ``listing`` table in line with the model, in one transaction.
 
-    Creates the table only when absent. Adds missing extra columns as
+    Creates each table only when absent (``daily_stats`` has no extra columns). Adds missing extra columns as
     ``INTEGER NOT NULL DEFAULT 0``. Never drops, renames or retypes anything.
 
     Args:
@@ -48,6 +49,7 @@ def sync_schema(database: peewee.Database) -> SyncReport:
         db.bind_database(database)
 
     created = False
+    created_daily = False
     added: list[str] = []
     with database.atomic():
         if isinstance(database, peewee.PostgresqlDatabase):
@@ -75,12 +77,16 @@ def sync_schema(database: peewee.Database) -> SyncReport:
             database.execute_sql(f'ALTER TABLE "{db.TABLE_NAME}" ADD COLUMN "{column}" INTEGER NOT NULL DEFAULT 0')
             added.append(column)
 
+        if not database.table_exists(db.DAILY_TABLE_NAME):
+            database.create_tables([db.DailyStat], safe=True)
+            created_daily = True
+
         expected = set(db.FIXED_COLUMNS) | set(db.EXTRA_COLUMN_MAP.values())
         orphans = [c for c in live if c not in expected]
 
     for column in orphans:
         logger.warning("Orphan column %r is in the database but not in the model; leaving it alone", column)
-    return SyncReport(created, added, orphans)
+    return SyncReport(created, added, orphans, created_daily)
 
 
 def run(database: peewee.Database | None = None) -> int:
@@ -120,7 +126,9 @@ def run(database: peewee.Database | None = None) -> int:
         logger.info("Created table %r with %d column(s)", db.TABLE_NAME, len(db.FIXED_COLUMNS) + len(db.EXTRA_COLUMN_MAP))
     if report.added_columns:
         logger.info("Added %d column(s): %s", len(report.added_columns), ", ".join(f"added {c}" for c in report.added_columns))
-    if not report.created_table and not report.added_columns:
+    if report.created_daily_table:
+        logger.info("Created table %r", db.DAILY_TABLE_NAME)
+    if not report.created_table and not report.added_columns and not report.created_daily_table:
         logger.info("Schema already up to date: no changes")
     return 0
 
