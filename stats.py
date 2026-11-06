@@ -6,7 +6,6 @@ connects to the database itself or loads ``.env``; entrypoints do that.
 
 from __future__ import annotations
 
-import json
 import logging
 from collections import defaultdict
 from collections.abc import Collection, Iterable
@@ -15,10 +14,11 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import db
+import make_config
 
 logger = logging.getLogger("autotrader.stats")
 
-MAKE_JSON_PATH = Path(__file__).resolve().parent / "make.json"
+MAKE_JSON_PATH = make_config.MAKE_JSON_PATH
 
 SearchKey = tuple[str, str, str]  # (make, model, model_type); '' rather than NULL
 
@@ -48,8 +48,7 @@ def _summarise(stat_date: date, key: SearchKey, cars: Collection[tuple[int, int]
 
 def load_searches(path: Path = MAKE_JSON_PATH) -> list[SearchKey]:
     """Return every ``(make, model, model_type)`` tracked in ``make.json``."""
-    with Path(path).open(encoding="utf-8") as f:
-        return [(e["uriValue"], e.get("model", ""), e.get("aggregatedTrim", "")) for e in json.load(f)]
+    return [(e.make, e.model, e.trim) for e in make_config.load_make_config(path)]
 
 
 def _listing_key(row: db.ListingBase) -> SearchKey:

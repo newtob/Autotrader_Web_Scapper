@@ -106,3 +106,30 @@ async fn the_connection_cannot_write() {
         .unwrap_err();
     assert!(err.to_string().contains("read-only"), "{err}");
 }
+
+#[tokio::test]
+async fn lists_distinct_priced_searches_in_order() {
+    let Some(pool) = seeded_pool().await else {
+        return;
+    };
+
+    let s = db::fetch_searches(&pool).await.unwrap();
+    let got: Vec<_> = s
+        .iter()
+        .map(|x| {
+            (
+                x.model.as_str(),
+                x.model_type.as_str(),
+                x.latest_date.to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("Macan", "", "2026-11-05".to_string()),
+            ("Taycan", "", "2026-11-05".to_string()),
+            ("Taycan", "4S", "2026-11-05".to_string()),
+        ]
+    );
+}

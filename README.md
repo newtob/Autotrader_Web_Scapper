@@ -91,10 +91,12 @@ Defines which make/model combinations to scrape. Each entry produces an independ
 |---|---|---|
 | `uriValue` | ✅ | Make name as used in the AutoTrader URL (e.g. `"Porsche"`) |
 | `model` | ✅ | Model name as used in the AutoTrader URL (e.g. `"Taycan"`) |
-| `fuelType` | ✅ | Fuel type filter (e.g. `"Electric"`, `"Petrol"`, `"Diesel"`) |
-| `aggregatedTrim` | optional | Trim variant (e.g. `"4S"`) — omit to match all trims |
+| `fuelType` | optional | Fuel type filter (e.g. `"Electric"`, `"Petrol"`, `"Diesel"`) |
+| `aggregatedTrim` | ✅ (key) | Trim variant (e.g. `"4S"`). The key must be present; use `""` to match all trims |
 | `price-to` | optional | Maximum asking price in GBP — omit for no upper limit |
-| `displayName` | optional | Human-readable label used in log output only |
+| `displayName` | optional | Human-readable label; defaults to `uriValue` |
+
+`make.json` is validated at startup (`make_config.py`): a missing or blank `uriValue`/`model`, a missing `aggregatedTrim` key, a bad `price-to` or a duplicate make/model/trim (case-insensitive) stops the run before the browser starts, naming the entry. Each entry is stored and shown in the price gallery automatically via `GET /api/searches` and `GET /api/prices`.
 
 To search for multiple cars, append additional objects to the array:
 

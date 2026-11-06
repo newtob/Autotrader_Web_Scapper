@@ -1,21 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fetchStats, type StatsResponse } from './lib/api';
+  import { fetchSearches, type SearchSummary } from './lib/api';
   import { formatDate } from './lib/format';
-  import ModelCard from './lib/ModelCard.svelte';
+  import SearchCard from './lib/SearchCard.svelte';
 
-  let data = $state<StatsResponse | null>(null);
+  let searches = $state<SearchSummary[] | null>(null);
   let failed = $state(false);
 
   async function load() {
     failed = false;
-    data = null;
+    searches = null;
     try {
-      data = await fetchStats();
+      searches = await fetchSearches();
     } catch {
       failed = true;
     }
   }
+
+  const latest = $derived(searches?.map((s) => s.latest_date).sort().at(-1));
 
   onMount(load);
 </script>
@@ -30,7 +32,7 @@
     <h1>Used car price gallery</h1>
     <p class="sub">
       Autotrader is scraped every day for used cars that fit the description.
-      {#if data}Data as of {formatDate(data.generated_at.slice(0, 10))}.{/if}
+      {#if latest}Data as of {formatDate(latest)}.{/if}
     </p>
   </header>
 
@@ -39,13 +41,15 @@
       <p>Couldn't load the latest prices. Try again later.</p>
       <button type="button" onclick={load}>Retry</button>
     </div>
-  {:else if !data}
+  {:else if !searches}
     <div class="skeleton" aria-busy="true" aria-label="Loading prices"></div>
     <div class="skeleton" aria-hidden="true"></div>
   {:else}
     <section class="gallery">
-      {#each data.searches as search, i (search.make + search.model + (search.model_type ?? ''))}
-        <ModelCard {search} index={i} />
+      {#each searches as summary, i (summary.make + '|' + summary.model + '|' + summary.type)}
+        <SearchCard {summary} index={i} />
+      {:else}
+        <p class="sub">No vehicles tracked yet — the first scrape will add them.</p>
       {/each}
     </section>
   {/if}

@@ -45,7 +45,7 @@ docs/specs/0004-Rust-Prices-API/read_only_role.sql
 1. The API connects as the `prices_reader` role (`read_only_role.sql`): `SELECT` on `daily_stats`
    only, `default_transaction_read_only = on`, nothing on `listing`.
 2. The query runs inside `SET TRANSACTION READ ONLY` and is always rolled back.
-3. The crate contains exactly one SQL statement apart from that `SET`; there is no write code.
+3. The crate contains exactly two SQL statements apart from that `SET` (the price series and, since Spec 0005, the distinct-searches list), both `SELECT`; there is no write code.
 
 ## Connection
 
@@ -62,5 +62,4 @@ anchoring, NULL days, case-insensitivity, type scoping, unknown searches and rea
 
 ## Out of scope
 
-Write paths, auth or rate limiting beyond the CDN cache, and switching `web/` from `/api/stats`
-to per-model `/api/prices` (the UI needs a model list; decide separately).
+Write paths and auth or rate limiting beyond the CDN cache. The UI model list is `GET /api/searches` (Spec 0005).

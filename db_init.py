@@ -77,6 +77,10 @@ def sync_schema(database: peewee.Database) -> SyncReport:
             database.execute_sql(f'ALTER TABLE "{db.TABLE_NAME}" ADD COLUMN "{column}" INTEGER NOT NULL DEFAULT 0')
             added.append(column)
 
+        # Blank model/trim are stored as '' (matching daily_stats); older rows may hold NULL.
+        for column in ("model", "model_type"):
+            database.execute_sql(f'UPDATE "{db.TABLE_NAME}" SET "{column}" = \'\' WHERE "{column}" IS NULL')
+
         if not database.table_exists(db.DAILY_TABLE_NAME):
             database.create_tables([db.DailyStat], safe=True)
             created_daily = True

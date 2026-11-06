@@ -5,7 +5,7 @@ use std::time::Duration;
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
 
 use crate::params::PriceQuery;
-use crate::response::Point;
+use crate::response::{Point, SearchSummary};
 
 /// Last `days` calendar days ending at the search's latest priced `stat_date`, oldest first.
 const SERIES_SQL: &str = "\
@@ -16,6 +16,13 @@ WHERE lower(make) = lower($1) AND lower(model) = lower($2) AND lower(model_type)
                    WHERE lower(make) = lower($1) AND lower(model) = lower($2) \
                      AND lower(model_type) = lower($3) AND avg_price_gbp IS NOT NULL) - $4::int \
 ORDER BY stat_date";
+
+/// Every search that has at least one priced day, with its latest priced date.
+const SEARCHES_SQL: &str = "\
+SELECT make, model, model_type, max(stat_date) FROM daily_stats \
+WHERE avg_price_gbp IS NOT NULL \
+GROUP BY make, model, model_type \
+ORDER BY make, model, model_type";
 
 /// Build a lazy single-connection pool. Never logs or returns the URL.
 ///
@@ -50,6 +57,28 @@ pub async fn fetch_series(pool: &PgPool, query: &PriceQuery) -> Result<Vec<Point
         .map(|(date, avg_price_gbp)| Point {
             date,
             avg_price_gbp,
+        })
+        .collect())
+}
+
+pub async fn fetch_searches(pool: &PgPool) -> Result<Vec<SearchSummary>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("SET TRANSACTION READ ONLY")
+        .persistent(false)
+        .execute(&mut *tx)
+        .await?;
+    let rows: Vec<(String, String, String, chrono::NaiveDate)> = sqlx::query_as(SEARCHES_SQL)
+        .persistent(false)
+        .fetch_all(&mut *tx)
+        .await?;
+    tx.rollback().await?;
+    Ok(rows
+        .into_iter()
+        .map(|(make, model, model_type, latest_date)| SearchSummary {
+            make,
+            model,
+            model_type,
+            latest_date,
         })
         .collect())
 }

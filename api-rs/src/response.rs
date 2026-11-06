@@ -36,6 +36,20 @@ impl<'a> PriceResponse<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SearchSummary {
+    pub make: String,
+    pub model: String,
+    #[serde(rename = "type")]
+    pub model_type: String,
+    pub latest_date: NaiveDate,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SearchesResponse<'a> {
+    pub searches: &'a [SearchSummary],
+}
+
 /// Fixed error body; never carries driver or connection text.
 pub fn error_body(message: &str) -> String {
     serde_json::json!({ "error": message }).to_string()
@@ -68,6 +82,26 @@ mod tests {
         let json = serde_json::to_value(PriceResponse::new(&q, &[])).unwrap();
         assert_eq!(json["series"], serde_json::json!([]));
         assert_eq!(json["type"], "");
+    }
+
+    #[test]
+    fn searches_serialise_documented_shape() {
+        let searches = [SearchSummary {
+            make: "Porsche".into(),
+            model: "Taycan".into(),
+            model_type: String::new(),
+            latest_date: NaiveDate::from_ymd_opt(2026, 11, 5).unwrap(),
+        }];
+        let json = serde_json::to_value(SearchesResponse {
+            searches: &searches,
+        })
+        .unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "searches": [
+                { "make": "Porsche", "model": "Taycan", "type": "", "latest_date": "2026-11-05" }
+            ]})
+        );
     }
 
     #[test]

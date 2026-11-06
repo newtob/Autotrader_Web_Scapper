@@ -23,6 +23,10 @@ vercel_runtime = { version = "2.4.1" }
 name = "prices"
 path = "api/prices.rs"
 
+[[bin]]
+name = "searches"
+path = "api/searches.rs"
+
 [[test]]
 name = "db_integration"
 path = "api-rs/tests/db_integration.rs"

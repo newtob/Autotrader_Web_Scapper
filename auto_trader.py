@@ -1,5 +1,4 @@
 import csv
-import json
 import logging
 import re
 import time
@@ -16,6 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 import db
+import make_config
 import stats
 
 enter_path_of_config_file = r"autotrader_config.csv"
@@ -538,8 +538,8 @@ def get_total_pages(
                             "fuel_type": fuel_type,
                             "detail_url": detail_url,
                             "make": make,
-                            "model": model or None,
-                            "model_type": trim or None,
+                            "model": model,
+                            "model_type": trim,
                             "postcode": postcode,
                             "extras": {},
                             "extras_other": "",
@@ -603,19 +603,11 @@ def get_make_data() -> list[tuple[str, str, str, str, str]]:
 
     The list is reversed so that the last entry in the file is processed first
     (legacy behaviour — preserves run order from earlier versions).
+
+    Raises:
+        make_config.MakeConfigError: If make.json is missing or has an invalid entry.
     """
-    with open("make.json", encoding="utf-8") as f:
-        json_list = json.load(f)
-    entries: list[tuple[str, str, str, str, str]] = [
-        (
-            entry["uriValue"],
-            entry.get("model", ""),
-            entry.get("fuelType", ""),
-            entry.get("aggregatedTrim", ""),
-            str(entry["price-to"]) if entry.get("price-to") else "",
-        )
-        for entry in json_list
-    ][::-1]
+    entries = [(e.make, e.model, e.fuel_type, e.trim, e.price_to) for e in make_config.load_make_config()][::-1]
     log.debug("get_make_data: loaded %d make/model entries", len(entries))
     return entries
 
@@ -851,6 +843,7 @@ def main() -> None:
     log.info("Starting AutoTrader scraper")
     try:
         db.init_db()
+        make_config.load_make_config()  # fail fast on a bad make.json, before Firefox starts
         _load_extras_prices()
         options = Options()
         # 'eager' fires after DOMContentLoaded — avoids hanging on ad/tracking resources
@@ -873,7 +866,7 @@ def cli() -> int:
     """Run ``main()`` and turn expected setup/database failures into a log line and exit code 1."""
     try:
         main()
-    except (db.ConfigError, db.SchemaError, db.DatabaseUnavailableError) as exc:
+    except (db.ConfigError, db.SchemaError, db.DatabaseUnavailableError, make_config.MakeConfigError) as exc:
         log.error("%s", exc)
         return 1
     return 0
