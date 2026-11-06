@@ -1,0 +1,13 @@
+title = "autotrader betterleaks config"
+
+[extend]
+useDefault = true
+
+# Fake credentials used as redaction-test fixtures and in the spec docs that describe those tests.
+[[allowlists]]
+description = "Fake test fixtures and spec docs"
+paths = [
+    '''^tests/test_config\.py$''',
+    '''^tests/test_db_init\.py$''',
+    '''^docs/specs/0002-Database-and-ORM/.*\.md$''',
+]
