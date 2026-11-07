@@ -2,6 +2,9 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
+# clippy runs at pre-push (slower); everything else at pre-commit.
+default_install_hook_types = ["pre-commit", "pre-push"]
+
 [[repos]]
 repo = "https://github.com/pre-commit/pre-commit-hooks"
 rev = "v6.0.0"
@@ -37,6 +40,33 @@ name = "betterleaks secret scan"
 entry = """bash -c 'BL=$(command -v betterleaks || command -v /opt/homebrew/bin/betterleaks || command -v /usr/local/bin/betterleaks || command -v "$HOME/.local/bin/betterleaks" || command -v "$HOME/.cargo/bin/betterleaks" || command -v /c/ProgramData/chocolatey/bin/betterleaks || command -v "$USERPROFILE/scoop/shims/betterleaks.exe" || command -v "$LOCALAPPDATA/Microsoft/WinGet/Links/betterleaks.exe" || command -v "/c/Program Files/betterleaks/betterleaks.exe" 2>/dev/null); if [ -z "$BL" ]; then GL=$(command -v gitleaks || command -v /opt/homebrew/bin/gitleaks || command -v /usr/local/bin/gitleaks || command -v "$HOME/.local/bin/gitleaks" || command -v "$HOME/.cargo/bin/gitleaks" || command -v /c/ProgramData/chocolatey/bin/gitleaks || command -v "$USERPROFILE/scoop/shims/gitleaks.exe" || command -v "$LOCALAPPDATA/Microsoft/WinGet/Links/gitleaks.exe" || command -v "/c/Program Files/Gitleaks/gitleaks.exe" 2>/dev/null) || { echo "gitleaks not found, skipping"; exit 0; }; "$GL" git --redact=80 --no-banner --timeout 2 -v --max-target-megabytes=2 --pre-commit --staged; else "$BL"; fi'"""
 language = "system"
 pass_filenames = false
+
+# Rust: all three wrap scripts/hooks/rust.sh and only run when Rust or Cargo files change.
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "cargo fmt"
+entry = "bash ./scripts/hooks/rust.sh fmt"
+language = "system"
+files = '\.rs$|(^|/)Cargo\.(toml|lock)$|^rustfmt\.toml$'
+pass_filenames = false
+
+# Fast (no compile). Skips with a message when cargo-machete is not installed; CI enforces it.
+[[repos.hooks]]
+id = "cargo-machete"
+name = "cargo machete (unused dependencies)"
+entry = "bash ./scripts/hooks/rust.sh machete"
+language = "system"
+files = '\.rs$|(^|/)Cargo\.(toml|lock)$'
+pass_filenames = false
+
+[[repos.hooks]]
+id = "cargo-clippy"
+name = "cargo clippy"
+entry = "bash ./scripts/hooks/rust.sh clippy"
+language = "system"
+files = '\.rs$|(^|/)Cargo\.(toml|lock)$|^rust-toolchain\.toml$'
+pass_filenames = false
+stages = ["pre-push"]
 
 
 # [[repos.hooks]]
