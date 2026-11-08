@@ -3,6 +3,7 @@ name = "autotrader-prices-api"
 version = "0.1.0"
 edition = "2024"
 publish = false
+license = "PolyForm-Strict-1.0.0"
 autotests = false
 
 [lib]

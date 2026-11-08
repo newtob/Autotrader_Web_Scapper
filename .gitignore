@@ -147,3 +147,5 @@ web/dist/
 target/
 .vercel
 .env*
+
+.claude/skills/ui-ux-pro-max/data/phosphor-icons-upstream.json

@@ -15,6 +15,10 @@ This project uses [`uv`](https://docs.astral.sh/uv/) for dependency management a
 | `just fix`      | Auto-fix lint issues and format with Ruff                  |
 | `just typecheck`| Type-check with `ty`                                       |
 | `just pysentry` | Dependency security scan with `pysentry-rs`                |
+| `just rust-check`   | Rust: fmt check, clippy (`-D warnings`), tests (`--locked`; set `TEST_DATABASE_URL` for DB tests) |
+| `just rust-machete` | Rust: find unused dependencies (`cargo-machete`)           |
+| `just rust-deny`    | Rust: advisories, licenses, bans, sources (`deny.toml`)    |
+| `just rust-build`   | Rust: release build of the Vercel handler binaries         |
 | `just clean`    | Remove `error_log.txt` and `scraper.log`               |
 | `just update`   | Upgrade all dependencies                                   |
 

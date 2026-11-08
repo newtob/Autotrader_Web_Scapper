@@ -54,8 +54,23 @@ web-test:
 [group('rust')]
 rust-check:
     cargo fmt --check
-    cargo clippy --all-targets -- -D warnings
-    cargo test -- --test-threads=1
+    cargo clippy --all-targets --locked -- -D warnings
+    cargo test --locked -- --test-threads=1
+
+# Find unused dependencies (needs: cargo install cargo-machete --locked)
+[group('rust')]
+rust-machete:
+    cargo machete
+
+# Advisories, licenses, bans and sources (needs: brew install cargo-deny); policy in deny.toml
+[group('rust')]
+rust-deny:
+    cargo deny check
+
+# Release build of the Vercel handler binaries (same profile as production: fat LTO)
+[group('rust')]
+rust-build:
+    cargo build --release --locked --bins
 
 # --- db ---
 

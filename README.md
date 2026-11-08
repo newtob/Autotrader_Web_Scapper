@@ -2,7 +2,7 @@
 
 A scraper for [autotrader.co.uk](https://www.autotrader.co.uk) that searches for car listingsand extracts details by viewing each car's individual advert page. It also collects optional extras, and stores results in a Postgres database (Supabase) through the Peewee ORM.
 
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](http://creativecommons.org/licenses/by-nc/4.0/)
+[![License: PolyForm Strict 1.0.0](https://img.shields.io/badge/License-PolyForm%20Strict%201.0.0-lightgrey.svg)](https://polyformproject.org/licenses/strict/1.0.0)
 [![Daily scrape](https://github.com/newtob/Autotrader_Web_Scapper/actions/workflows/scrape.yml/badge.svg)](https://github.com/newtob/Autotrader_Web_Scapper/actions/workflows/scrape.yml)
 ---
 

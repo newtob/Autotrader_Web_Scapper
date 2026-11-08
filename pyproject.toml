@@ -3,6 +3,8 @@ name = "autotrader-web-scapper"
 version = "0.1.1"
 description = "Selenium-based scraper for autotrader.co.uk vehicle listings"
 requires-python = ">=3.11"
+license = "PolyForm-Strict-1.0.0"
+license-files = ["LICENSE"]
 dependencies = [
     "beautifulsoup4>=4.15.0",
     "peewee>=4.5.3",

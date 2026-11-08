@@ -13,7 +13,7 @@ ignore = []
 
 [licenses]
 confidence-threshold = 0.9
-# This crate is `publish = false` and carries no license field.
+# Our own crate is `publish = false` and PolyForm-Strict-1.0.0 (noncommercial, deliberately not in `allow`).
 private = { ignore = true }
 allow = [
     "MIT",

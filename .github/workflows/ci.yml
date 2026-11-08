@@ -84,14 +84,57 @@ jobs:
 
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    # Throwaway Postgres so api-rs/tests/db_integration.rs runs (it drops and recreates daily_stats)
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: ci
+      PGPASSWORD: ci
+      PGDATABASE: ci
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # rust-toolchain.toml selects stable + clippy + rustfmt; DB tests are skipped without TEST_DATABASE_URL
+      # rust-toolchain.toml selects stable + clippy + rustfmt
       - name: Install toolchain
         run: rustup show active-toolchain || rustup toolchain install
 
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
+        with:
+          tool: cargo-machete
+
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
-      - run: cargo test --locked -- --test-threads=1
+      - name: Tests (including DB integration tests)
+        run: |
+          export TEST_DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@${PGHOST}:5432/${PGDATABASE}"
+          cargo test --locked -- --test-threads=1
+      - name: Unused dependencies
+        run: cargo machete
+      # Same profile as production (fat LTO); catches handler build failures before Vercel does
+      - name: Release build
+        run: cargo build --release --locked --bins
+
+  rust-deny:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Advisories, licenses, bans, sources
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
