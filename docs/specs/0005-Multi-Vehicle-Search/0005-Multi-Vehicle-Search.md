@@ -17,7 +17,7 @@ Any number of vehicles can be tracked by adding entries to `make.json`. Every en
 
 ## API
 
-`GET /api/searches` (Rust, `api/searches.rs`) → `{"searches":[{"make","model","type","latest_date"}]}`, ordered by
+`GET /api/searches` (Rust, Axum route in `api-rs/src/routes.rs`) → `{"searches":[{"make","model","type","latest_date"}]}`, ordered by
 make/model/type, only searches with at least one priced day. Same read-only role, `SET TRANSACTION READ ONLY`,
 cache headers and error behaviour as `/api/prices`. The UI then calls `/api/prices?days=1095` once per search
 (CDN-cached) and slices periods client-side.

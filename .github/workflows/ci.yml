@@ -60,7 +60,7 @@ jobs:
         run: uv run pytest -q
 
       - name: Dependency security scan
-        run: uv run pysentry-rs .
+        run: uv run pysentry-rs --color never --compact .
 
   web:
     runs-on: ubuntu-latest

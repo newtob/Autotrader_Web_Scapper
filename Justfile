@@ -123,7 +123,7 @@ check: lint fmt-check typecheck
 # Dependency security scan
 [group('security')]
 pysentry:
-    uv run pysentry-rs .
+    uv run pysentry-rs --color never --compact .
 
 # SAST scan (requires semgrep)
 [group('security')]

@@ -33,12 +33,46 @@ supersedes the Python `api/stats.py` read API in Spec 0003 §6.
 
 ```
 Cargo.toml / rust-toolchain.toml   # Vercel requires Cargo.toml at the repo root
-api/prices.rs                      # thin handler (vercel_runtime)
+api/index.rs                       # the one Vercel function: Axum router wrapped in VercelLayer
+api-rs/src/routes.rs               # Axum router, handlers, trace + timeout layers
+api-rs/src/{error,state,telemetry}.rs # AppError (IntoResponse), pool state, JSON tracing setup
+api-rs/src/limits.rs               # per-client rate limit and in-flight cap
 api-rs/src/{params,db,response}.rs # parsing, the single SELECT, JSON shape
+api-rs/tests/http.rs               # router tests via tower `oneshot` (no sockets)
 api-rs/tests/db_integration.rs     # needs TEST_DATABASE_URL (throwaway Postgres); skipped otherwise
-vercel.json                        # maxDuration for api/prices.rs
+vercel.json                        # maxDuration for api/index.rs; rewrites /api/* to it
 docs/specs/0004-Rust-Prices-API/read_only_role.sql
 ```
+
+## Framework
+
+Axum 0.8 on `vercel_runtime` (its `axum` feature, `VercelLayer`). `vercel.json` rewrites every
+`/api/*` request to the single `api/index.rs` function, and the router dispatches by path. All
+failures go through `AppError`, which renders the fixed JSON error bodies above. A `TimeoutLayer`
+(8 s, under the 10 s `maxDuration`) answers `503` with an empty body if a request hangs. Path
+parameters, if ever added, use the Axum 0.8 `{id}` syntax. `HEAD` is answered by the `GET` handler
+(Axum default); other methods return `405`.
+
+### Request IDs and logs
+
+Every response carries `x-request-id`: a UUID, or the caller's own value if they sent one (it is
+not overwritten, so treat it as a correlation hint, not a trusted identity). Logs are JSON, one
+object per line, at `LOG_LEVEL` (default `info`). Each request logs one line with `method`,
+`path`, `request_id`, `status` and `latency` (ms). The query string is not logged. Errors log by
+kind only, never driver or connection text.
+
+### Abuse limits (`api-rs/src/limits.rs`)
+
+Both are generous, so ordinary use never sees them, and both are **per warm instance**, not
+global. The CDN cache absorbs repeat requests; firm platform-wide limits belong in Vercel's firewall.
+
+| Limit | Default | Over the limit |
+| ----- | ------- | -------------- |
+| Per client (`x-real-ip`, else first `x-forwarded-for`; no header shares one bucket) | burst 120, refills 10 a second | `429` `{"error":"too many requests"}` + `Retry-After` |
+| Requests in flight, all clients | 64 | `503` `{"error":"server busy"}` + `Retry-After: 1` |
+
+The rate limit sits outside the in-flight cap, so a throttled client never takes a slot. The
+client key relies on Vercel overwriting those headers; behind any other host it can be spoofed.
 
 ## Read-only guarantees
 
@@ -56,7 +90,8 @@ named prepared statements. One lazily-created connection per warm instance, 3 s 
 ## Testing
 
 `just rust-check` runs `cargo fmt --check`, clippy (`-D warnings`) and `cargo test`. Parameter and
-response tests are pure. `db_integration` runs against a throwaway Postgres when
+response tests are pure. `http` drives the router directly (400, 405, 503 without a pool, 404, and
+the 200 path and cache headers when `TEST_DATABASE_URL` is set). `db_integration` runs against a throwaway Postgres when
 `TEST_DATABASE_URL` is set (e.g. a local `postgres:17-alpine` container); it covers window
 anchoring, NULL days, case-insensitivity, type scoping, unknown searches and read-only enforcement.
 

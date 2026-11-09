@@ -5,7 +5,7 @@
   "buildCommand": "cd web && npm run build",
   "outputDirectory": "web/dist",
   "functions": {
-    "api/prices.rs": { "maxDuration": 10 },
-    "api/searches.rs": { "maxDuration": 10 }
-  }
+    "api/index.rs": { "maxDuration": 10 }
+  },
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }]
 }
