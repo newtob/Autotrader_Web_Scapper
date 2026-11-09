@@ -102,11 +102,7 @@ async fn method_not_allowed() -> AppError {
 
 /// Log a failed query by kind only, never the driver text, then answer 503.
 fn query_failed(e: sqlx::Error) -> AppError {
-    tracing::error!(
-        "database query failed: {}",
-        e.as_database_error()
-            .map_or("connection or protocol error", |_| "database error")
-    );
+    tracing::error!("database query failed: {}", db::error_kind(&e));
     AppError::Unavailable
 }
 

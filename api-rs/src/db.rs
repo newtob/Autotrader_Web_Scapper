@@ -24,6 +24,12 @@ WHERE avg_price_gbp IS NOT NULL \
 GROUP BY make, model, model_type \
 ORDER BY make, model, model_type";
 
+/// A fixed label for logging a failure: never the driver text, which can carry connection details.
+pub fn error_kind(e: &sqlx::Error) -> &'static str {
+    e.as_database_error()
+        .map_or("connection or protocol error", |_| "database error")
+}
+
 /// Build a lazy single-connection pool. Never logs or returns the URL.
 ///
 /// The statement cache is disabled because the Supabase transaction pooler (port 6543) does not

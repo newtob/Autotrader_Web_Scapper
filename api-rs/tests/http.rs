@@ -335,7 +335,9 @@ async fn database_backed_routes_return_200_with_cache_headers() {
     .execute(&pool)
     .await
     .unwrap();
-    let app = router(AppState::new(Some(pool)));
+    let state = AppState::new(Some(pool));
+    state.warm_up(); // must not disturb the requests below
+    let app = router(state);
 
     let (status, cache, body) = send(
         app.clone(),

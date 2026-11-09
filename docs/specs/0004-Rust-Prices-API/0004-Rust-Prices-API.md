@@ -87,6 +87,12 @@ client key relies on Vercel overwriting those headers; behind any other host it 
 for `prices_reader`. The statement cache is disabled because the transaction pooler does not keep
 named prepared statements. One lazily-created connection per warm instance, 3 s acquire timeout.
 
+The function runs in `lhr1` (London, AWS `eu-west-2`) via `"regions": ["lhr1"]` in `vercel.json`,
+next to the Supabase database, because the first-connection handshakes cost several round trips.
+Vercel's default is `iad1` (US East); keep this in step if the database region ever changes. At
+startup `AppState::warm_up` opens the first connection in the background so the handshake overlaps
+init rather than delaying the first request. If it fails, it only logs and the first request retries.
+
 ## Testing
 
 `just rust-check` runs `cargo fmt --check`, clippy (`-D warnings`) and `cargo test`. Parameter and

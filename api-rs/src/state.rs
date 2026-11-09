@@ -31,6 +31,20 @@ impl AppState {
         Self::new(pool)
     }
 
+    /// Open the first connection in the background, so its TCP, TLS and pooler handshakes overlap
+    /// startup instead of delaying the first request. A failure is only logged (by kind); the first
+    /// request simply tries again. Needs a Tokio runtime; does nothing without a pool.
+    pub fn warm_up(&self) {
+        let Some(pool) = self.pool.clone() else {
+            return;
+        };
+        tokio::spawn(async move {
+            if let Err(e) = pool.acquire().await {
+                tracing::warn!("pool warm-up failed: {}", db::error_kind(&e));
+            }
+        });
+    }
+
     pub fn pool(&self) -> Result<&PgPool, AppError> {
         self.pool.as_ref().ok_or(AppError::Unavailable)
     }

@@ -7,8 +7,10 @@ use vercel_runtime::{Error, axum::VercelLayer, run};
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     telemetry::init();
+    let state = AppState::from_env();
+    state.warm_up();
     let service = ServiceBuilder::new()
         .layer(VercelLayer::new())
-        .service(router(AppState::from_env()));
+        .service(router(state));
     run(service).await
 }
