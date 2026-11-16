@@ -4,7 +4,6 @@
         "uriValue": "Porsche",
         "model": "Taycan",
         "fuelType": "Electric",
-        "aggregatedTrim": "4S",
-        "price-to": 42000
+        "aggregatedTrim": "4S"
     }
 ]
