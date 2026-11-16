@@ -12,6 +12,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pysentry-rs>=0.4.7",
     "selenium>=4.45.0",
+    "soupsieve==4.1; python_full_version >= '3.11.5'",
 ]
 
 [dependency-groups]
